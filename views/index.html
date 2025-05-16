@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mock Clover Payment</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 400px;
+      margin: 50px auto;
+      padding: 20px;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+    }
+    input, button {
+      display: block;
+      width: 100%;
+      padding: 10px;
+      margin-top: 10px;
+    }
+    #status {
+      margin-top: 20px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h2>Mock Clover Payment</h2>
+  <form id="paymentForm">
+    <label for="amount">Amount ($)</label>
+    <input type="number" id="amount" name="amount" required>
+
+    <label for="description">Description</label>
+    <input type="text" id="description" name="description" required>
+
+    <button type="submit">Pay Now</button>
+  </form>
+
+  <div id="status"></div>
+
+  <script>
+    const form = document.getElementById('paymentForm');
+    const statusDiv = document.getElementById('status');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const amount = document.getElementById('amount').value;
+      const description = document.getElementById('description').value;
+
+      const res = await fetch('/api/payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount, description })
+      });
+
+      const data = await res.json();
+      if (data.status === 'success') {
+        statusDiv.textContent = `✅ Payment successful: $${data.transaction.amount} for "${data.transaction.description}"`;
+        statusDiv.style.color = 'green';
+      } else {
+        statusDiv.textContent = '❌ Payment failed.';
+        statusDiv.style.color = 'red';
+      }
+    });
+  </script>
+</body>
+</html>
