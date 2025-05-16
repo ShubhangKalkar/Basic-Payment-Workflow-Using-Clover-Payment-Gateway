@@ -56,7 +56,7 @@ app.get('/oauth/callback', async (req, res) => {
 
 // Step 3: Payment API - Create Order and Add Line Item
 app.post('/api/payment', async (req, res) => {
-  if (!accessToken) return res.status(401).send('Not authenticated. Go to /oauth/authorize');
+  if (!accessToken) return res.status(401).json({ status: 'error', message: 'Not authenticated. Go to /oauth/authorize' });
 
   const { amount, description } = req.body;
   if (!amount || !description) {
