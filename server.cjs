@@ -1,4 +1,4 @@
-// server.js
+// server.cjs
 require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -8,9 +8,10 @@ const axios = require('axios');
 const qs = require('qs');
 const app = express();
 const PORT = 3000;
-const MERCHANT_ID = '34AKAZ56HH7Y1';
 
 let accessToken = null; // Temporary token storage
+const MERCHANT_ID = '34AKAZ56HH7Y1'; // Replace with your actual Clover test merchant ID
+const CLOVER_API_BASE = `https://sandbox.dev.clover.com/v3/merchants/${MERCHANT_ID}`;
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -22,6 +23,7 @@ app.get('/oauth/authorize', async (req, res) => {
   res.redirect(authUrl);
 });
 
+// Step 2: Handle OAuth2 callback and exchange code for token
 app.get('/oauth/callback', async (req, res) => {
   if (accessToken) {
     return res.send('✅ You are already authenticated.');
@@ -40,9 +42,7 @@ app.get('/oauth/callback', async (req, res) => {
         grant_type: 'authorization_code'
       }),
       {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        }
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
       }
     );
 
@@ -54,8 +54,8 @@ app.get('/oauth/callback', async (req, res) => {
   }
 });
 
-// Test Payment Endpoint (mock for now)
-app.post('/api/payment', (req, res) => {
+// Step 3: Payment API - Create Order and Add Line Item
+app.post('/api/payment', async (req, res) => {
   if (!accessToken) return res.status(401).send('Not authenticated. Go to /oauth/authorize');
 
   const { amount, description } = req.body;
@@ -63,25 +63,43 @@ app.post('/api/payment', (req, res) => {
     return res.status(400).json({ status: 'error', message: 'Missing fields' });
   }
 
-  const transaction = {
-    id: Date.now(),
-    amount,
-    description,
-    status: 'success',
-    timestamp: new Date().toISOString()
-  };
+  try {
+    // Step 1: Create order
+    const orderRes = await axios.post(
+      `${CLOVER_API_BASE}/orders`,
+      {},
+      {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      }
+    );
+    const orderId = orderRes.data.id;
 
-  const logPath = path.join(__dirname, 'transactions.json');
-  let logs = [];
-  if (fs.existsSync(logPath)) {
-    logs = JSON.parse(fs.readFileSync(logPath));
+    // Step 2: Add line item to order
+    const itemRes = await axios.post(
+      `${CLOVER_API_BASE}/orders/${orderId}/line_items`,
+      {
+        name: description,
+        price: parseInt(amount * 100), // Clover uses cents
+        quantity: 1
+      },
+      {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      }
+    );
+
+    res.json({
+      status: 'success',
+      orderId,
+      itemId: itemRes.data.id,
+      message: `Order created with item: ${description}`
+    });
+  } catch (err) {
+    console.error('Clover API error:', err.response?.data || err);
+    res.status(500).send('Clover payment workflow failed.');
   }
-  logs.push(transaction);
-  fs.writeFileSync(logPath, JSON.stringify(logs, null, 2));
-
-  res.json({ status: 'success', transaction });
 });
 
+// Serve frontend
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'index.html'));
 });
