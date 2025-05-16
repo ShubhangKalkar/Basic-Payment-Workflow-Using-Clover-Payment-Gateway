@@ -10,7 +10,7 @@ const app = express();
 const PORT = 3000;
 
 let accessToken = null; // Temporary token storage
-const MERCHANT_ID = '34AKAZ56HH7Y1'; // Replace with your actual Clover test merchant ID
+const MERCHANT_ID = 'your-merchant-id'; // Replace with your actual Clover test merchant ID
 const CLOVER_API_BASE = `https://sandbox.dev.clover.com/v3/merchants/${MERCHANT_ID}`;
 
 app.use(bodyParser.json());
@@ -95,7 +95,7 @@ app.post('/api/payment', async (req, res) => {
     });
   } catch (err) {
     console.error('Clover API error:', err.response?.data || err);
-    res.status(500).send('Clover payment workflow failed.');
+    res.status(500).json({ status: 'error', message: 'Clover payment workflow failed.' });
   }
 });
 
