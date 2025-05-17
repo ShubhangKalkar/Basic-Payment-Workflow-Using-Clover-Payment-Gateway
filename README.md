@@ -26,7 +26,7 @@ This is a full-stack web application that simulates a Clover-integrated payment 
 1. **Clone the repository**
 
    ```bash
-   git clone [<your-repo-url>](https://github.com/ShubhangKalkar/Basic-Payment-Workflow-Using-Clover-Payment-Gateway.git)
+   git clone https://github.com/ShubhangKalkar/Basic-Payment-Workflow-Using-Clover-Payment-Gateway.git
    cd <project-folder>
 ````
 
