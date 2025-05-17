@@ -1,65 +1,215 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mock Clover Payment</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title> Clover Payment Gateway</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      max-width: 400px;
-      margin: 50px auto;
-      padding: 20px;
-      border: 1px solid #ccc;
-      border-radius: 10px;
+    * {
+      box-sizing: border-box;
     }
-    input, button {
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f4f4f4;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      background: white;
+      border-radius: 10px;
+      padding: 30px;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+    h2 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    label {
+      margin-top: 10px;
+      font-weight: 600;
       display: block;
+    }
+    input {
       width: 100%;
       padding: 10px;
+      margin-top: 5px;
+      margin-bottom: 10px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      font-size: 14px;
+    }
+    button {
       margin-top: 10px;
+      padding: 12px;
+      background-color: #28a745;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      font-size: 16px;
+      cursor: pointer;
+      width: 100%;
+    }
+    button:hover {
+      background-color: #218838;
     }
     #status {
       margin-top: 20px;
       font-weight: bold;
+      text-align: center;
     }
   </style>
 </head>
 <body>
-  <h2>Mock Clover Payment</h2>
-  <form id="paymentForm">
-    <label for="amount">Amount ($)</label>
-    <input type="number" id="amount" name="amount" required>
+  <div class="container">
+    <h2>Clover Payment Gateway</h2>
+    <form id="paymentForm">
+      <label for="amount">Amount ($)</label>
+      <input type="text" id="amount" name="amount" required />
 
-    <label for="description">Description</label>
-    <input type="text" id="description" name="description" required>
+      <label for="description">Description</label>
+      <input type="text" id="description" name="description" required />
 
-    <button type="submit">Pay Now</button>
-  </form>
-
-  <div id="status"></div>
+      <button type="submit" id="initialPay">Pay Now</button>
+    </form>
+    <div id="status"></div>
+  </div>
 
   <script>
     const form = document.getElementById('paymentForm');
     const statusDiv = document.getElementById('status');
+    let orderId = null;
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const amount = document.getElementById('amount').value;
-      const description = document.getElementById('description').value;
 
-      const res = await fetch('/api/payment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount, description })
-      });
+      const amount = document.getElementById('amount').value.trim();
+      const description = document.getElementById('description').value.trim();
+      const isFinalStep = !!document.getElementById('finalPay');
 
-      const data = await res.json();
-      if (data.status === 'success') {
-        statusDiv.textContent = `✅ Payment successful: $${data.transaction.amount} for "${data.transaction.description}"`;
-        statusDiv.style.color = 'green';
-      } else {
-        statusDiv.textContent = '❌ Payment failed.';
+      if (!amount || isNaN(amount) || parseFloat(amount) <= 0 || !/^\d+(\.\d{1,2})?$/.test(amount)) {
+        statusDiv.textContent = '❌ Please enter a valid amount (numbers only, decimal allowed)';
+        statusDiv.style.color = 'red';
+        return;
+      }
+
+      if (!description) {
+        statusDiv.textContent = '❌ Please enter a product description.';
+        statusDiv.style.color = 'red';
+        return;
+      }
+
+      if (!isFinalStep) {
+        const orderRes = await fetch('/api/payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount, description })
+        });
+
+        const orderData = await orderRes.json();
+
+        if (orderData.status === 'success') {
+          orderId = orderData.orderId;
+
+          const cardHtml = `
+            <label for="cardNumber">Card Number</label>
+            <input type="text" id="cardNumber" name="cardNumber" required />
+
+            <label for="expDate">Expiration (MM/YY)</label>
+            <input type="text" id="expDate" name="expDate" placeholder="MM/YY" required />
+
+            <label for="cvv">CVV</label>
+            <input type="text" id="cvv" name="cvv" required />
+          `;
+
+          form.insertAdjacentHTML('beforeend', cardHtml);
+
+          const finalPayBtn = document.createElement('button');
+          finalPayBtn.textContent = 'Submit Payment';
+          finalPayBtn.type = 'submit';
+          finalPayBtn.id = 'finalPay';
+          form.appendChild(finalPayBtn);
+
+          document.getElementById('initialPay').style.display = 'none';
+
+          statusDiv.textContent = '✔️ Order created. Enter card details to complete payment.';
+          statusDiv.style.color = 'green';
+        } else {
+          statusDiv.textContent = '❌ Failed to create order.';
+          statusDiv.style.color = 'red';
+        }
+        return;
+      }
+
+      const cardNumber = document.getElementById('cardNumber').value.trim().replace(/\s+/g, '');
+      const expDate = document.getElementById('expDate').value.trim();
+      const cvv = document.getElementById('cvv').value.trim();
+
+      if (!/^\d{12,16}$/.test(cardNumber)) {
+        statusDiv.textContent = '❌ Invalid card number. Must be 12 to 16 digits.';
+        statusDiv.style.color = 'red';
+        return;
+      }
+
+      if (!/^\d{2}\/\d{2}$/.test(expDate)) {
+        statusDiv.textContent = '❌ Invalid expiration format. Use MM/YY';
+        statusDiv.style.color = 'red';
+        return;
+      }
+
+      const [expMonth, expYear] = expDate.split('/').map(str => parseInt(str));
+      if (isNaN(expMonth) || expMonth < 1 || expMonth > 12) {
+        statusDiv.textContent = '❌ Invalid expiration month.';
+        statusDiv.style.color = 'red';
+        return;
+      }
+
+      const current = new Date();
+      const currentYear = current.getFullYear() % 100;
+      const currentMonth = current.getMonth() + 1;
+
+      if (expYear < currentYear || (expYear === currentYear && expMonth < currentMonth)) {
+        statusDiv.textContent = '❌ Card is expired.';
+        statusDiv.style.color = 'red';
+        return;
+      }
+
+      if (!/^\d{3}$/.test(cvv)) {
+        statusDiv.textContent = '❌ Invalid CVV. Must be exactly 3 digits.';
+        statusDiv.style.color = 'red';
+        return;
+      }
+
+      try {
+        const chargeRes = await fetch('/api/charge', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amount,
+            orderId,
+            cardNumber,
+            expMonth,
+            expYear,
+            cvv
+          })
+        });
+
+        const chargeData = await chargeRes.json();
+
+        if (chargeData.status === 'success') {
+          statusDiv.textContent = `✅ Payment complete! Payment ID: ${chargeData.paymentId}`;
+          statusDiv.style.color = 'green';
+        } else {
+          statusDiv.textContent = `❌ Payment failed. ${chargeData.message}`;
+          statusDiv.style.color = 'red';
+        }
+      } catch (err) {
+        statusDiv.textContent = '❌ Unexpected error. Please try again.';
         statusDiv.style.color = 'red';
       }
     });
