@@ -1,4 +1,4 @@
-// server.cjs
+// Load environment variables from .env file
 require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -9,21 +9,29 @@ const qs = require('qs');
 const app = express();
 const PORT = 3000;
 
+// In-memory session-like storage
 let accessToken = null;
 let MERCHANT_ID = null;
 let currentOrder = {}; // store order and amount in memory
 
+// Base URL for Clover API (dynamically uses merchant ID)
 const CLOVER_API_BASE = () => `https://sandbox.dev.clover.com/v3/merchants/${MERCHANT_ID}`;
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(express.static(path.join(__dirname, 'views')));
 
+////////////////////////
+// 1. OAuth Flow
+////////////////////////
+
+// Redirect user to Clover login and app authorization page
 app.get('/oauth/authorize', async (req, res) => {
   const authUrl = `https://sandbox.dev.clover.com/oauth/authorize?client_id=${process.env.CLOVER_CLIENT_ID}&response_type=code&redirect_uri=${process.env.CLOVER_REDIRECT_URI}`;
   res.redirect(authUrl);
 });
 
+// Handle the redirect callback from Clover and exchange code for token
 app.get('/oauth/callback', async (req, res) => {
   const code = req.query.code;
   const merchantId = req.query.merchant_id;
@@ -50,12 +58,20 @@ app.get('/oauth/callback', async (req, res) => {
     MERCHANT_ID = merchantId;
     console.log('Access token received:', accessToken);
     console.log('Merchant ID:', MERCHANT_ID);
-    res.send('✅ OAuth success! Access token received.');
+    res.send('OAuth success! Access token received.');
   } catch (err) {
     console.error('Token exchange error:', err.response?.data || err);
     res.status(500).send('OAuth token exchange failed.');
   }
 });
+
+
+//////////////////////////////////////
+// 2. Create Order and Add Item
+//////////////////////////////////////
+
+// POST /api/payment
+// Create a Clover order and add a product line item
 
 app.post('/api/payment', async (req, res) => {
   if (!accessToken) return res.status(401).json({ status: 'error', message: 'Not authenticated. Go to /oauth/authorize' });
@@ -66,6 +82,7 @@ app.post('/api/payment', async (req, res) => {
   }
 
   try {
+    // Create a new order
     const orderRes = await axios.post(
       `${CLOVER_API_BASE()}/orders`,
       {},
@@ -75,6 +92,7 @@ app.post('/api/payment', async (req, res) => {
     );
     const orderId = orderRes.data.id;
 
+    // Add line item to order
     await axios.post(
       `${CLOVER_API_BASE()}/orders/${orderId}/line_items`,
       {
@@ -87,7 +105,9 @@ app.post('/api/payment', async (req, res) => {
       }
     );
 
+    // Store this order temporarily to use in the next step (charge)
     currentOrder = { orderId, amount };
+
     res.json({ status: 'success', orderId });
   } catch (err) {
     console.error('Clover API error:', err.response?.data || err);
@@ -95,6 +115,13 @@ app.post('/api/payment', async (req, res) => {
   }
 });
 
+
+///////////////////////////
+// 3. Charge Card
+///////////////////////////
+
+// POST /api/charge
+// Use test card data to simulate a payment for an order
 app.post('/api/charge', async (req, res) => {
   if (!accessToken) return res.status(401).json({ status: 'error', message: 'Not authenticated' });
 
@@ -103,11 +130,13 @@ app.post('/api/charge', async (req, res) => {
 
   console.log('Incoming charge request body:', req.body);
 
+  // Check that all required fields exist
   if (!orderId || !amount || !cardNumber || !expMonth || !expYear || !cvv) {
     return res.status(400).json({ status: 'error', message: 'Missing payment fields' });
   }
 
   try {
+    // Initiate the payment using Clover's test sandbox
     const paymentRes = await axios.post(
       `${CLOVER_API_BASE()}/payments`,
       {
@@ -133,6 +162,7 @@ app.post('/api/charge', async (req, res) => {
       }
     );
 
+    // Log the transaction locally in transactions.json
     const logPath = path.join(__dirname, 'transactions.json');
     let logs = [];
     if (fs.existsSync(logPath)) {
@@ -153,8 +183,14 @@ app.post('/api/charge', async (req, res) => {
   }
 });
 
+/////////////////////////////
+// 4. Serving Frontend
+/////////////////////////////
+
+// Serving the landing page
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'index.html'));
 });
 
+// Start the server
 app.listen(PORT, () => console.log(`Server running at http://localhost:${PORT}`));
