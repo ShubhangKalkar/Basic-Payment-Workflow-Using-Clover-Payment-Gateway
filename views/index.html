@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title> Clover Payment Gateway</title>
+
+  <!-- Styling for layout, form and button aesthetics -->
   <style>
     * {
       box-sizing: border-box;
@@ -68,6 +70,8 @@
 <body>
   <div class="container">
     <h2>Clover Payment Gateway</h2>
+
+    <!-- Payment Form: first step is amount + description -->
     <form id="paymentForm">
       <label for="amount">Amount ($)</label>
       <input type="text" id="amount" name="amount" required />
@@ -75,11 +79,14 @@
       <label for="description">Description</label>
       <input type="text" id="description" name="description" required />
 
-      <button type="submit" id="initialPay">Pay Now</button>
+      <!-- Initial Pay Now button -->
+      <button type="submit" id="initialPay">Add to Cart</button>
     </form>
+    <!-- Message area for success/failure/status -->
     <div id="status"></div>
   </div>
 
+  <!-- JavaScript handles two-step process and validation -->
   <script>
     const form = document.getElementById('paymentForm');
     const statusDiv = document.getElementById('status');
@@ -88,10 +95,12 @@
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
 
+      // Get input values
       const amount = document.getElementById('amount').value.trim();
       const description = document.getElementById('description').value.trim();
       const isFinalStep = !!document.getElementById('finalPay');
 
+      // Step 1 validation for amount & description
       if (!amount || isNaN(amount) || parseFloat(amount) <= 0 || !/^\d+(\.\d{1,2})?$/.test(amount)) {
         statusDiv.textContent = '❌ Please enter a valid amount (numbers only, decimal allowed)';
         statusDiv.style.color = 'red';
@@ -104,6 +113,7 @@
         return;
       }
 
+      // Step 1: Create order and inject card fields
       if (!isFinalStep) {
         const orderRes = await fetch('/api/payment', {
           method: 'POST',
@@ -116,6 +126,7 @@
         if (orderData.status === 'success') {
           orderId = orderData.orderId;
 
+          // Dynamically inject card input fields + final button
           const cardHtml = `
             <label for="cardNumber">Card Number</label>
             <input type="text" id="cardNumber" name="cardNumber" required />
@@ -135,6 +146,7 @@
           finalPayBtn.id = 'finalPay';
           form.appendChild(finalPayBtn);
 
+          // Hide first button
           document.getElementById('initialPay').style.display = 'none';
 
           statusDiv.textContent = '✔️ Order created. Enter card details to complete payment.';
@@ -146,6 +158,7 @@
         return;
       }
 
+      // Step 2: Validate card details
       const cardNumber = document.getElementById('cardNumber').value.trim().replace(/\s+/g, '');
       const expDate = document.getElementById('expDate').value.trim();
       const cvv = document.getElementById('cvv').value.trim();
@@ -185,6 +198,7 @@
         return;
       }
 
+      // Submit payment request to server
       try {
         const chargeRes = await fetch('/api/charge', {
           method: 'POST',
