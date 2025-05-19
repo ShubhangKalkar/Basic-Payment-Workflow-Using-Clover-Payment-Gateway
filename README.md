@@ -1,32 +1,32 @@
+
+---
+
+### `README.md`
+
+````markdown
 # Mock Clover Payment App 💳
 
-This is a full-stack web application that simulates a Clover-integrated payment flow using OAuth2 and Clover's Orders and Payments APIs.
-
-## 🔧 Features
-
-- OAuth2 login flow with Clover Developer credentials
-- Create new orders and add line items via Clover API
-- Collect and validate card information
-- Process test card payments in sandbox mode
-- Fully responsive two-step UI
-- Local transaction logging to `transactions.json`
+A full-stack Node.js web application that simulates a Clover-integrated checkout flow. Built for demoing OAuth2 authentication, real-time order creation, and test card payment using the Clover Developer Sandbox.
 
 ---
 
-## 🚀 Tech Stack
+## Features
 
-- Node.js + Express
-- HTML + CSS + Vanilla JS (no frontend framework)
-- Clover Developer Sandbox APIs
+- OAuth2 login flow with Clover
+- Create Clover orders and add items
+- Collect and validate credit card data
+- Submit a payment using test card credentials
+- Two-step user interface (order → payment)
+- Transaction logging to `transactions.json`
 
 ---
 
-## 📦 Setup Instructions
+## Setup Instructions
 
-1. **Clone the repository**
+1. **Clone the project**
 
    ```bash
-   git clone https://github.com/ShubhangKalkar/Basic-Payment-Workflow-Using-Clover-Payment-Gateway.git
+   git clone <your-repo-url>
    cd <project-folder>
 ````
 
@@ -36,9 +36,9 @@ This is a full-stack web application that simulates a Clover-integrated payment 
    npm install
    ```
 
-3. **Create `.env` file**
+3. **Configure Environment Variables**
 
-   Create a `.env` file in the root with the following:
+   Create a `.env` file:
 
    ```env
    CLOVER_CLIENT_ID=your_app_id
@@ -52,60 +52,112 @@ This is a full-stack web application that simulates a Clover-integrated payment 
    node server.cjs
    ```
 
-5. **Go to browser**
+5. **Run the app**
 
-   * Open `http://localhost:3000/oauth/authorize` and authorize the app with your test merchant.
-   * Then visit `http://localhost:3000` to use the payment form.
-
----
-
-## 💡 Test Card Details
-
-Use the following sandbox credentials:
-
-* **Card Number:** `4111111111111111`
-* **Expiration:** `MM/YY` (future only)
-* **CVV:** `123`
+   * Visit `http://localhost:3000/oauth/authorize` and approve the app
+   * Then go to `http://localhost:3000` to start the payment flow
 
 ---
 
-## ✅ Input Validation (Frontend)
+## How OAuth2 Works
 
-* Amount: required, numeric only, decimal supported
-* Card Number: 12–16 digits only
-* Expiration: must be 2-digit `MM/YY`, not expired
-* CVV: exactly 3 digits
-* Double-submit prevention, inline messaging
+1. **User visits** `/oauth/authorize`
+   → Redirected to Clover login
 
----
+2. **User approves access** to your app for their merchant account
 
-## 📄 Output
+3. **Clover redirects back** to `/oauth/callback?code=...&merchant_id=...`
 
-* All successful transactions are saved to `transactions.json` with:
+4. **Server exchanges** the `code` for an `access_token` using:
 
-  * `orderId`
-  * `paymentId`
-  * `amount`
-  * timestamp
+   ```
+   POST https://sandbox.dev.clover.com/oauth/token
+   ```
 
----
+5. Server stores:
 
-## 📚 Notes
+   * Access token
+   * Merchant ID
 
-* Uses Clover's sandbox: [https://sandbox.dev.clover.com](https://sandbox.dev.clover.com)
-* Your app must be installed in a test merchant for token access to succeed.
-* Clover permissions required:
-
-  * `Read & Write: Merchant, Orders, Payments`
+This token is used in all authorized Clover API requests below.
 
 ---
 
-## 🧪 Testing Edge Cases
+## Clover API Calls Used
 
-* Invalid amount or characters in amount
-* Invalid card number length
-* Expired cards
-* Missing fields
-* Server/API failures
+### Create Order
 
-All handled gracefully in the UI with helpful messages.
+```
+POST /v3/merchants/{merchant_id}/orders
+Headers: Authorization: Bearer <access_token>
+```
+
+Creates a new order and returns `orderId`.
+
+---
+
+### Add Line Item
+
+```
+POST /v3/merchants/{merchant_id}/orders/{orderId}/line_items
+Body: { name, price, quantity }
+```
+Adds product details to the order.
+
+---
+
+### Process Payment
+
+```
+POST /v3/merchants/{merchant_id}/payments
+Headers: Authorization: Bearer <access_token>
+Body:
+{
+  amount,
+  order: { id },
+  tender: { labelKey: "com.clover.tender.credit_card" },
+  source: {
+    type: "card",
+    card: { number, exp_month, exp_year, cvv }
+  }
+}
+```
+
+Uses test card data to simulate a payment and return a `paymentId`.
+
+---
+
+## Test Card to Use
+
+| Field       | Value                                   |
+| ----------- | ------------------                      |
+| Card Number | `4111111111111111` or any other number  |
+| Expiry      | Any future MM/YY                        |
+| CVV         | `123` / any 3 digit number              |
+
+---
+
+## Validations (Frontend)
+
+* Amount: required, numeric, supports decimals
+* Card Number: 12–16 digits
+* Expiration: MM/YY format, future date only
+* CVV: 3 digits
+* Graceful API error handling
+
+---
+
+## Logs
+
+All successful payments are logged to `transactions.json`:
+
+```json
+[
+  {
+    "paymentId": "ABC123",
+    "orderId": "XYZ789",
+    "amount": "25",
+    "timestamp": "2024-05-17T12:00:00Z"
+  }
+]
+```
